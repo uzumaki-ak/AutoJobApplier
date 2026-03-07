@@ -1,0 +1,155 @@
+// [F74] prisma/schema.prisma
+// Database schema — NOTE: In Prisma 7, DATABASE_URL is in prisma.config.ts NOT here
+// Run: npx prisma generate  (must run manually in Prisma 7)
+// Run: npx prisma migrate dev --name init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String        @id @default(cuid())
+  email         String        @unique
+  name          String?
+  image         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Gmail OAuth tokens (stored encrypted-side, never logged)
+  gmailAccessToken  String?
+  gmailRefreshToken String?
+  gmailTokenExpiry  DateTime?
+
+  profiles       Profile[]
+  applications   Application[]
+  emailTemplates EmailTemplate[]
+
+  @@map("users")
+}
+
+model Profile {
+  id              String   @id @default(cuid())
+  userId          String
+  name            String   // e.g. "Full Stack Dev", "Blockchain Dev"
+  title           String
+  skills          String[] // postgres array
+  projects        Json     // [{name, impact}]
+  summary         String?
+  contactEmail    String?
+  contactPhone    String?
+  location        String?
+  portfolioUrl    String?
+  githubUrl       String?
+  linkedinUrl     String?
+  experience      Json?
+  education       Json?
+  certifications  String[] @default([])
+  achievements    String[] @default([])
+  resumeText      String?
+  resumeUrl       String?
+  experienceLevel String
+  preferredRoles  String[]
+  tonePreference  String   @default("confident") // confident|formal|friendly|direct|startup
+  isDefault       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  applications Application[]
+
+  @@map("profiles")
+}
+
+model Application {
+  id             String            @id @default(cuid())
+  userId         String
+  profileId      String?
+  company        String
+  role           String
+  hrEmail        String?
+  jobDescription String?
+  status         ApplicationStatus @default(APPLIED)
+  matchScore     Int?              // 0-100
+  matchReason    String?
+  mailSubject    String?
+  mailBody       String?
+  notes          String?
+  appliedAt      DateTime          @default(now())
+  followupAt     DateTime?
+  followupSent   Boolean           @default(false)
+  updatedAt      DateTime          @updatedAt
+
+  // Detected duplicate check
+  sourceUrl      String?
+
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profile      Profile?    @relation(fields: [profileId], references: [id])
+  emails       Email[]
+  statusHistory StatusHistory[]
+
+  @@map("applications")
+}
+
+model Email {
+  id            String   @id @default(cuid())
+  applicationId String
+  subject       String
+  body          String
+  sentAt        DateTime @default(now())
+  replyDetected Boolean  @default(false)
+  replyAt       DateTime?
+  gmailThreadId String?
+  emailType     EmailType @default(OUTREACH)
+  isDraft       Boolean   @default(false)
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@map("emails")
+}
+
+model EmailTemplate {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  subject   String
+  body      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("email_templates")
+}
+
+model StatusHistory {
+  id            String            @id @default(cuid())
+  applicationId String
+  fromStatus    ApplicationStatus
+  toStatus      ApplicationStatus
+  changedAt     DateTime          @default(now())
+  note          String?
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@map("status_history")
+}
+
+// ─── Enums ────────────────────────────────────────
+enum ApplicationStatus {
+  APPLIED
+  INTERVIEW
+  OFFER
+  REJECTED
+  NO_RESPONSE
+}
+
+enum EmailType {
+  OUTREACH
+  FOLLOWUP
+  OTHER
+}

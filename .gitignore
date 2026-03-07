@@ -1,0 +1,58 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+coverage/
+
+# Next.js build output
+.next/
+out/
+
+# Production
+build/
+
+# Misc
+.DS_Store
+*.pem
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Prisma
+prisma/*.db
+prisma/migrations/*.sql
+prisma/*.sqlite
+prisma/*.sqlite-journal
+
+# Google API Credentials
+client_secret_*.json
+
+# Docker
+docker-compose.override.yml
+
+# Vercel
+.vercel
+
+# Logs
+logs
+*.log
+
+# OS generated files
+Thumbs.db
+Desktop.ini

@@ -1,0 +1,116 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* [F02] src/app/globals.css — Tailwind v3 CSS config
+   All theme tokens defined in tailwind.config.ts
+   Orbitron font loaded below, color system: white/blue light, black/gold dark */
+
+/* ─── Font Import ─────────────────────────────── */
+@import url("https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&display=swap");
+
+/* ─── CSS Variables for Light Mode ────────────── */
+:root {
+  --color-background: #ffffff;
+  --color-foreground: #0f172a;
+  --color-muted: #f1f5f9;
+  --color-muted-foreground: #64748b;
+  --color-border: #e2e8f0;
+  --color-card: #ffffff;
+  --color-card-foreground: #0f172a;
+  --color-primary: #2563eb;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #f1f5f9;
+  --color-secondary-foreground: #0f172a;
+  --color-accent: #eff6ff;
+  --color-accent-foreground: #1d4ed8;
+  --color-destructive: #ef4444;
+  --color-destructive-foreground: #ffffff;
+  --color-ring: #2563eb;
+  --color-input: #e2e8f0;
+  --font-inter: "Inter", sans-serif;
+  --font-orbitron: "Orbitron", sans-serif;
+}
+
+/* ─── Dark Mode Theme (Black + Gold) ─────────── */
+.dark {
+  --color-background: #0a0a0a;
+  --color-foreground: #f5f0e8;
+  --color-muted: #1a1a1a;
+  --color-muted-foreground: #a09070;
+  --color-border: #2a2a2a;
+  --color-card: #111111;
+  --color-card-foreground: #f5f0e8;
+  --color-primary: #d4a843;
+  --color-primary-foreground: #0a0a0a;
+  --color-secondary: #1a1a1a;
+  --color-secondary-foreground: #f5f0e8;
+  --color-accent: #1f1700;
+  --color-accent-foreground: #d4a843;
+  --color-destructive: #ff4444;
+  --color-destructive-foreground: #0a0a0a;
+  --color-ring: #d4a843;
+  --color-input: #2a2a2a;
+}
+
+/* ─── Base Styles ─────────────────────────────── */
+* {
+  @apply box-border;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-inter);
+  line-height: 1.5;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Orbitron for headings and brand elements */
+h1, h2, h3, .font-display {
+  font-family: var(--font-orbitron);
+  letter-spacing: 0.02em;
+}
+
+/* ─── Glassmorphism utility ───────────────────── */
+.glass {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.dark .glass {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(212, 168, 67, 0.15);
+}
+
+/* ─── Scrollbar ───────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-muted-foreground); }
+
+/* ─── Focus ring ──────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ─── Selection ───────────────────────────────── */
+::selection {
+  background-color: var(--color-primary);
+  color: var(--color-primary-foreground);
+}
+
+/* ─── Smooth transitions for interactive elements */
+button, a, input, textarea, select {
+  transition: all 0.15s ease;
+}
+
