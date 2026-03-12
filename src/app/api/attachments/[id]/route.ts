@@ -6,9 +6,14 @@ import { deleteUserAttachment, updateUserAttachment } from "@/lib/attachments/st
 
 const attachmentLogger = logger.child({ module: "api/attachments/[id]" });
 
-const UpdateAttachmentSchema = z.object({
-  isActive: z.boolean(),
-});
+const UpdateAttachmentSchema = z
+  .object({
+    isActive: z.boolean().optional(),
+    linkedProfileId: z.string().nullable().optional(),
+  })
+  .refine((data) => data.isActive !== undefined || data.linkedProfileId !== undefined, {
+    message: "No updates provided",
+  });
 
 type RouteContext = {
   params: Promise<{ id: string }>;

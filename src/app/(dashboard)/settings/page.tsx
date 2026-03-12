@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth/server";
 import { db } from "@/lib/db/prisma";
 import { getGmailAuthUrl } from "@/lib/gmail/client";
+import { ResumeAttachments } from "@/components/resume-attachments";
 
 export default async function SettingsPage() {
   const session = await auth();
@@ -63,6 +64,8 @@ export default async function SettingsPage() {
           </div>
         </div>
       </div>
+
+      <ResumeAttachments />
 
       {/* API Keys info */}
       <div className="glass rounded-2xl p-6 space-y-3">
