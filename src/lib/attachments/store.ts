@@ -1,33 +1,31 @@
-import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { db } from "@/lib/db/prisma";
 
-const ATTACHMENTS_ROOT = path.join(process.cwd(), "storage", "user-attachments");
 const MAX_ATTACHMENT_BYTES = 6 * 1024 * 1024;
 const MAX_ATTACHMENTS_PER_USER = 5;
 
-export type StoredAttachment = {
+export type AttachmentRecord = {
   id: string;
-  userId: string;
   fileName: string;
   mimeType: string;
   sizeBytes: number;
-  storagePath: string;
   isActive: boolean;
   linkedProfileId?: string | null;
   createdAt: string;
   updatedAt: string;
 };
 
-export type AttachmentRecord = Omit<StoredAttachment, "storagePath" | "userId">;
+type AttachmentRow = {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  isActive: boolean;
+  linkedProfileId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
 
-function getUserDir(userId: string) {
-  return path.join(ATTACHMENTS_ROOT, userId);
-}
-
-function getManifestPath(userId: string) {
-  return path.join(getUserDir(userId), "manifest.json");
-}
+type AttachmentWithContent = AttachmentRow & { content: Buffer };
 
 function sanitizeFileName(fileName: string) {
   const trimmed = fileName.trim();
@@ -36,73 +34,87 @@ function sanitizeFileName(fileName: string) {
   return safe.length > 120 ? safe.slice(0, 120) : safe;
 }
 
-function toAttachmentRecord(attachment: StoredAttachment): AttachmentRecord {
-  const { storagePath: _storagePath, userId: _userId, ...rest } = attachment;
-  return rest;
+function toAttachmentRecord(attachment: AttachmentRow): AttachmentRecord {
+  return {
+    id: attachment.id,
+    fileName: attachment.fileName,
+    mimeType: attachment.mimeType,
+    sizeBytes: attachment.sizeBytes,
+    isActive: attachment.isActive,
+    linkedProfileId: attachment.linkedProfileId ?? null,
+    createdAt: attachment.createdAt.toISOString(),
+    updatedAt: attachment.updatedAt.toISOString(),
+  };
 }
 
-async function ensureUserDirectory(userId: string) {
-  await mkdir(getUserDir(userId), { recursive: true });
-}
-
-async function readManifest(userId: string): Promise<StoredAttachment[]> {
-  await ensureUserDirectory(userId);
-  const manifestPath = getManifestPath(userId);
-
-  try {
-    const content = await readFile(manifestPath, "utf8");
-    const parsed = JSON.parse(content) as StoredAttachment[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "";
-    if (message.includes("ENOENT")) {
-      return [];
-    }
-    throw error;
-  }
-}
-
-async function writeManifest(userId: string, attachments: StoredAttachment[]) {
-  await ensureUserDirectory(userId);
-  await writeFile(getManifestPath(userId), JSON.stringify(attachments, null, 2), "utf8");
+function withContent(attachment: AttachmentWithContent) {
+  return {
+    ...toAttachmentRecord(attachment),
+    content: attachment.content,
+  };
 }
 
 export async function listUserAttachments(userId: string): Promise<AttachmentRecord[]> {
-  const attachments = await readManifest(userId);
-  return attachments
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .map(toAttachmentRecord);
+  const attachments = await db.attachment.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      fileName: true,
+      mimeType: true,
+      sizeBytes: true,
+      isActive: true,
+      linkedProfileId: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+
+  return attachments.map(toAttachmentRecord);
 }
 
-export async function loadActiveUserAttachments(userId: string): Promise<Array<AttachmentRecord & { content: Buffer }>> {
-  const attachments = await readManifest(userId);
-  const activeAttachments = attachments.filter((attachment) => attachment.isActive);
+export async function loadActiveUserAttachments(
+  userId: string
+): Promise<Array<AttachmentRecord & { content: Buffer }>> {
+  const attachments = await db.attachment.findMany({
+    where: { userId, isActive: true },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      fileName: true,
+      mimeType: true,
+      sizeBytes: true,
+      isActive: true,
+      linkedProfileId: true,
+      createdAt: true,
+      updatedAt: true,
+      content: true,
+    },
+  });
 
-  const withContent = await Promise.all(
-    activeAttachments.map(async (attachment) => ({
-      ...toAttachmentRecord(attachment),
-      content: await readFile(attachment.storagePath),
-    }))
-  );
-
-  return withContent;
+  return attachments.map(withContent);
 }
 
 export async function loadUserAttachmentById(
   userId: string,
   attachmentId: string
 ): Promise<(AttachmentRecord & { content: Buffer }) | null> {
-  const attachments = await readManifest(userId);
-  const attachment = attachments.find((item) => item.id === attachmentId);
+  const attachment = await db.attachment.findFirst({
+    where: { userId, id: attachmentId },
+    select: {
+      id: true,
+      fileName: true,
+      mimeType: true,
+      sizeBytes: true,
+      isActive: true,
+      linkedProfileId: true,
+      createdAt: true,
+      updatedAt: true,
+      content: true,
+    },
+  });
 
-  if (!attachment) {
-    return null;
-  }
-
-  return {
-    ...toAttachmentRecord(attachment),
-    content: await readFile(attachment.storagePath),
-  };
+  return attachment ? withContent(attachment) : null;
 }
 
 export async function saveUserAttachment(input: {
@@ -125,34 +137,24 @@ export async function saveUserAttachment(input: {
     throw new Error("Attachment file is too large (max 6MB).");
   }
 
-  const existing = await readManifest(input.userId);
-  if (existing.length >= MAX_ATTACHMENTS_PER_USER) {
+  const existingCount = await db.attachment.count({ where: { userId: input.userId } });
+  if (existingCount >= MAX_ATTACHMENTS_PER_USER) {
     throw new Error(`You can store up to ${MAX_ATTACHMENTS_PER_USER} attachments.`);
   }
 
-  await ensureUserDirectory(input.userId);
-  const id = randomUUID();
   const safeFileName = sanitizeFileName(input.fileName);
-  const storagePath = path.join(getUserDir(input.userId), `${id}-${safeFileName}`);
-  const now = new Date().toISOString();
+  const attachment = await db.attachment.create({
+    data: {
+      userId: input.userId,
+      fileName: safeFileName,
+      mimeType: input.mimeType,
+      sizeBytes: input.bytes.byteLength,
+      content: input.bytes,
+      isActive: input.isActive ?? true,
+      linkedProfileId: input.linkedProfileId ?? null,
+    },
+  });
 
-  await writeFile(storagePath, input.bytes);
-
-  const attachment: StoredAttachment = {
-    id,
-    userId: input.userId,
-    fileName: safeFileName,
-    mimeType: input.mimeType,
-    sizeBytes: input.bytes.byteLength,
-    storagePath,
-    isActive: input.isActive ?? true,
-    linkedProfileId: input.linkedProfileId ?? null,
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  const next = [attachment, ...existing];
-  await writeManifest(input.userId, next);
   return toAttachmentRecord(attachment);
 }
 
@@ -161,69 +163,72 @@ export async function updateUserAttachment(
   attachmentId: string,
   updates: { isActive?: boolean; linkedProfileId?: string | null }
 ): Promise<AttachmentRecord> {
-  const existing = await readManifest(userId);
-  const index = existing.findIndex((attachment) => attachment.id === attachmentId);
+  const existing = await db.attachment.findFirst({
+    where: { userId, id: attachmentId },
+    select: {
+      id: true,
+      fileName: true,
+      mimeType: true,
+      sizeBytes: true,
+      isActive: true,
+      linkedProfileId: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
 
-  if (index === -1) {
+  if (!existing) {
     throw new Error("Attachment not found.");
   }
 
-  const current = existing[index];
-  const nextAttachment: StoredAttachment = {
-    ...current,
-    isActive: typeof updates.isActive === "boolean" ? updates.isActive : current.isActive,
-    linkedProfileId:
-      updates.linkedProfileId === undefined ? current.linkedProfileId ?? null : updates.linkedProfileId,
-    updatedAt: new Date().toISOString(),
-  };
+  const updated = await db.attachment.update({
+    where: { id: attachmentId },
+    data: {
+      isActive: typeof updates.isActive === "boolean" ? updates.isActive : existing.isActive,
+      linkedProfileId:
+        updates.linkedProfileId === undefined ? existing.linkedProfileId ?? null : updates.linkedProfileId,
+    },
+  });
 
-  existing[index] = nextAttachment;
-  await writeManifest(userId, existing);
-  return toAttachmentRecord(nextAttachment);
+  return toAttachmentRecord(updated);
 }
 
 export async function deleteUserAttachment(userId: string, attachmentId: string): Promise<AttachmentRecord> {
-  const existing = await readManifest(userId);
-  const target = existing.find((attachment) => attachment.id === attachmentId);
+  const target = await db.attachment.findFirst({
+    where: { userId, id: attachmentId },
+    select: {
+      id: true,
+      fileName: true,
+      mimeType: true,
+      sizeBytes: true,
+      isActive: true,
+      linkedProfileId: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
 
   if (!target) {
     throw new Error("Attachment not found.");
   }
 
-  const next = existing.filter((attachment) => attachment.id !== attachmentId);
-  await writeManifest(userId, next);
-
-  try {
-    await unlink(target.storagePath);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "";
-    if (!message.includes("ENOENT")) {
-      throw error;
-    }
-  }
-
+  await db.attachment.delete({ where: { id: attachmentId } });
   return toAttachmentRecord(target);
 }
 
 export async function clearUserAttachmentStorage(userId: string) {
-  await rm(getUserDir(userId), { recursive: true, force: true });
+  await db.attachment.deleteMany({ where: { userId } });
 }
 
 export async function getAttachmentStorageUsage(userId: string) {
-  const attachments = await readManifest(userId);
-  let totalBytes = 0;
-
-  for (const attachment of attachments) {
-    try {
-      const fileStat = await stat(attachment.storagePath);
-      totalBytes += fileStat.size;
-    } catch {
-      totalBytes += attachment.sizeBytes;
-    }
-  }
+  const aggregated = await db.attachment.aggregate({
+    where: { userId },
+    _sum: { sizeBytes: true },
+    _count: { _all: true },
+  });
 
   return {
-    totalBytes,
-    count: attachments.length,
+    totalBytes: aggregated._sum.sizeBytes ?? 0,
+    count: aggregated._count._all ?? 0,
   };
 }

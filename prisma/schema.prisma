@@ -28,6 +28,7 @@ model User {
   profiles       Profile[]
   applications   Application[]
   emailTemplates EmailTemplate[]
+  attachments    Attachment[]
 
   @@map("users")
 }
@@ -137,6 +138,24 @@ model StatusHistory {
   application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
   @@map("status_history")
+}
+
+model Attachment {
+  id              String   @id @default(cuid())
+  userId          String
+  fileName        String
+  mimeType        String
+  sizeBytes       Int
+  content         Bytes
+  isActive        Boolean  @default(true)
+  linkedProfileId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("attachments")
 }
 
 // ─── Enums ────────────────────────────────────────
