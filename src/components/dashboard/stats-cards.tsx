@@ -15,8 +15,8 @@ interface StatsCardsProps {
 
 export function StatsCards({ stats }: StatsCardsProps) {
   const cards = [
-    { label: "Total Applied", value: stats.total, icon: Send, color: "text-blue-400" },
-    { label: "Active (Applied)", value: stats.applied, icon: Briefcase, color: "text-yellow-400" },
+    { label: "Total Tracked", value: stats.total, icon: Send, color: "text-blue-400" },
+    { label: "Sent (Applied)", value: stats.applied, icon: Briefcase, color: "text-yellow-400" },
     { label: "Interviews", value: stats.interviews, icon: Calendar, color: "text-purple-400" },
     { label: "Offers", value: stats.offers, icon: Trophy, color: "text-green-400" },
   ];

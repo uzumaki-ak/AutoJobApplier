@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
 
     if (existing) {
       return NextResponse.json(
-        { success: false, error: "Already applied to this role", data: existing },
+        { success: false, error: "Already tracking this role", data: existing },
         { status: 409 }
       )
     }
@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
         mailBody:    mailBody ?? null,
         profileId:   profileId ?? null,
         sourceUrl:   sourceUrl ?? null,
-        status:      "APPLIED",
+        status:      "SAVED",
         matchScore,
         matchReason,
         followupAt:  followupAt ? new Date(followupAt) : new Date(Date.now() + 5 * 86400000),

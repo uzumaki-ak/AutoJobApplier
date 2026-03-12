@@ -40,6 +40,7 @@ async function getAnalyticsData(userId: string) {
 
   // Summary stats
   const total = applications.length;
+  const sent = applications.filter((app) => app.status !== "SAVED").length;
   const interviews = statusDist.INTERVIEW ?? 0;
   const offers = statusDist.OFFER ?? 0;
   const avgScore =
@@ -51,8 +52,8 @@ async function getAnalyticsData(userId: string) {
     statusDist: Object.entries(statusDist).map(([status, count]) => ({ status, count })),
     stats: {
       total,
-      interviewRate: total > 0 ? Math.round((interviews / total) * 100) : 0,
-      offerRate: total > 0 ? Math.round((offers / total) * 100) : 0,
+      interviewRate: sent > 0 ? Math.round((interviews / sent) * 100) : 0,
+      offerRate: sent > 0 ? Math.round((offers / sent) * 100) : 0,
       avgScore: Math.round(avgScore),
     },
   };
@@ -69,7 +70,7 @@ export default async function AnalyticsPage() {
       {/* Summary stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "Total Applied", value: data.stats.total, suffix: "" },
+          { label: "Total Tracked", value: data.stats.total, suffix: "" },
           { label: "Interview Rate", value: data.stats.interviewRate, suffix: "%" },
           { label: "Offer Rate", value: data.stats.offerRate, suffix: "%" },
           { label: "Avg Match Score", value: data.stats.avgScore, suffix: "%" },

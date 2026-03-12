@@ -24,7 +24,7 @@ export function Sidebar({ onClose }: SidebarProps) {
   const pathname = usePathname();
 
   return (
-    <aside className="w-56 h-full bg-[var(--color-card)] border-r border-[var(--color-border)] flex flex-col">
+    <aside className="flex h-screen w-56 shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-card)] md:sticky md:top-0">
       {/* Brand */}
       <div className="h-16 flex items-center justify-between px-5 border-b border-[var(--color-border)] shrink-0">
         <span className="font-display text-sm font-bold text-[var(--color-primary)] tracking-wider">

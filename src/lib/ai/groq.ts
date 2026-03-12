@@ -25,7 +25,7 @@ async function callGroq(prompt: string, systemMsg?: string): Promise<string> {
   try {
     const response = await groq.chat.completions.create({
       model: MODEL,
-      temperature: 0.7,
+      temperature: 0.45,
       max_tokens: 512,
       messages: [
         ...(systemMsg ? [{ role: "system" as const, content: systemMsg }] : []),

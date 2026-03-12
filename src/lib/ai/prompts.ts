@@ -1,8 +1,52 @@
-// [F63] src/lib/ai/prompts.ts — All AI prompt templates
-// Centralized prompt management — edit here to tune AI behavior
-// Templates use {{placeholder}} syntax replaced before calling AI
+// [F63] src/lib/ai/prompts.ts - All AI prompt templates
+// Centralized prompt management for email generation and profile matching.
 
 import type { Profile } from "@/types/profile";
+
+function normalizeForMatch(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9+#.]+/g, " ").trim();
+}
+
+function skillMatchesJob(skill: string, normalizedJobDescription: string): boolean {
+  const normalizedSkill = normalizeForMatch(skill);
+  if (!normalizedSkill) return false;
+  if (normalizedJobDescription.includes(normalizedSkill)) return true;
+
+  const tokens = normalizedSkill.split(" ").filter((token) => token.length >= 4);
+  return tokens.some((token) => normalizedJobDescription.includes(token));
+}
+
+function extractJobKeywords(jobDescription: string): string[] {
+  const normalized = normalizeForMatch(jobDescription);
+  const keywordList = [
+    "python",
+    "django",
+    "fastapi",
+    "flask",
+    "rag",
+    "llm",
+    "nlp",
+    "embeddings",
+    "vector database",
+    "microservices",
+    "aws",
+    "gcp",
+    "azure",
+    "kafka",
+    "postgresql",
+    "mysql",
+    "mongodb",
+    "sql",
+    "nosql",
+    "api",
+    "backend",
+    "machine learning",
+    "ai",
+    "genai",
+  ];
+
+  return keywordList.filter((keyword) => skillMatchesJob(keyword, normalized)).slice(0, 12);
+}
 
 /** Build the email generation prompt */
 export function buildEmailPrompt(opts: {
@@ -14,6 +58,7 @@ export function buildEmailPrompt(opts: {
   recruiterName?: string;
 }): string {
   const { profile, company, role, jobDescription, tone, recruiterName } = opts;
+  const normalizedJobDescription = normalizeForMatch(jobDescription);
 
   const toneGuide: Record<string, string> = {
     confident: "Confident and direct. Executive tone with clear impact statements.",
@@ -43,7 +88,7 @@ export function buildEmailPrompt(opts: {
   const experience = (profile.experience ?? [])
     .map((e) => {
       const dates = e.dates ? ` (${e.dates})` : "";
-      const highlights = e.highlights ? ` — ${e.highlights}` : "";
+      const highlights = e.highlights ? ` - ${e.highlights}` : "";
       return `- ${e.role} @ ${e.company}${dates}${highlights}`;
     })
     .join("\n");
@@ -51,13 +96,16 @@ export function buildEmailPrompt(opts: {
   const education = (profile.education ?? [])
     .map((e) => {
       const dates = e.dates ? ` (${e.dates})` : "";
-      const details = e.details ? ` — ${e.details}` : "";
+      const details = e.details ? ` - ${e.details}` : "";
       return `- ${e.degree} | ${e.school}${dates}${details}`;
     })
     .join("\n");
 
   const certifications = (profile.certifications ?? []).join(", ");
   const achievements = (profile.achievements ?? []).join("\n");
+  const overlapSkills = profile.skills.filter((skill) => skillMatchesJob(skill, normalizedJobDescription)).slice(0, 10);
+  const nonOverlapSkills = profile.skills.filter((skill) => !skillMatchesJob(skill, normalizedJobDescription)).slice(0, 10);
+  const jobKeywords = extractJobKeywords(jobDescription);
 
   const summaryLine = profile.summary ? `Summary: ${profile.summary}` : "";
   const linksBlock = links ? `Links:\n${links}` : "";
@@ -65,7 +113,7 @@ export function buildEmailPrompt(opts: {
 
   return `You are an expert job outreach assistant.
 
-Write a professional job application email. 260-360 words. No markdown.
+Write a professional job application email. 170-240 words. No markdown.
 
 CANDIDATE PROFILE:
 Name: ${profile.name}
@@ -92,20 +140,26 @@ Role: ${role}
 ${recruiterName ? `Recruiter: ${recruiterName}` : ""}
 Job Description:
 ${jobDescription.slice(0, 2200)}
+Detected Job Keywords: ${jobKeywords.join(", ") || "None"}
+Profile-Job Overlap Skills: ${overlapSkills.join(", ") || "None"}
+Profile Skills To Avoid Unless Directly Relevant: ${nonOverlapSkills.join(", ") || "None"}
 
 TONE: ${toneGuide[tone] ?? toneGuide.confident}
 
 EMAIL REQUIREMENTS:
 1. Use a formal greeting ("Dear <Name>" if recruiter name is given; else "Dear Hiring Team")
-2. Open with 1-2 sentences about applying for the role + current status
-3. Include 3-5 bullet points showing relevant skills/experience/projects
+2. Open with 1-2 sentences about applying for the role
+3. Include exactly 3-4 bullet points showing only job-relevant skills/experience/projects
 4. Add a short paragraph about why this company/role interests the candidate
 5. If links are provided, add a "Links:" section with Portfolio/GitHub/LinkedIn
 6. Do NOT invent links or contact details. If missing, omit them entirely.
-7. Avoid repeating the same claim or sentence in different wording.
-8. End with a polite call to action and a full signature (name, location, email, phone if available)
-9. Do NOT mention AI or automation
-10. Output ONLY the email body (no subject line)`;
+7. Never mention technologies that are unrelated to this job posting.
+8. If overlap is partial, frame it honestly as transferable backend experience; do not claim years or depth not evidenced.
+9. Avoid repetition and generic filler language.
+10. Do not paste resume-style paragraphs; write a focused application email tailored to this role.
+11. End with a polite call to action and a full signature (name, location, email, phone if available)
+12. Do NOT mention AI or automation
+13. Output ONLY the email body (no subject line)`;
 }
 
 /** Build follow-up email prompt */
@@ -132,7 +186,7 @@ RULES:
 6. Output ONLY email body`;
 }
 
-/** Build match scoring prompt — returns JSON */
+/** Build match scoring prompt - returns JSON */
 export function buildMatchScorePrompt(opts: {
   profile: Profile;
   jobDescription: string;
@@ -157,7 +211,7 @@ Return EXACTLY this JSON structure:
 }`;
 }
 
-/** Build profile classifier prompt — auto-select best profile */
+/** Build profile classifier prompt - auto-select best profile */
 export function buildProfileClassifierPrompt(opts: {
   jobDescription: string;
   role: string;
@@ -178,7 +232,7 @@ Return EXACTLY:
 }`;
 }
 
-/** Build resume extraction prompt â€” returns JSON */
+/** Build resume extraction prompt - returns JSON */
 export function buildResumeExtractionPrompt(opts: { resumeText: string }): string {
   return `Extract a structured resume profile from the text below. Return ONLY valid JSON, no markdown.
 

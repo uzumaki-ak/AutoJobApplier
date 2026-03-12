@@ -5,6 +5,7 @@
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
 
 const COLORS: Record<string, string> = {
+  SAVED: "#f59e0b",
   APPLIED: "#eab308",
   INTERVIEW: "#3b82f6",
   OFFER: "#22c55e",
@@ -13,6 +14,7 @@ const COLORS: Record<string, string> = {
 };
 
 const LABELS: Record<string, string> = {
+  SAVED: "Saved",
   APPLIED: "Applied",
   INTERVIEW: "Interview",
   OFFER: "Offer",

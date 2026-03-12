@@ -3,10 +3,18 @@
 
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Copy, ExternalLink, Save, Send, X } from "lucide-react";
 import { buildGmailComposeUrl } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+
+type AttachmentSummary = {
+  id: string;
+  fileName: string;
+  sizeBytes: number;
+  isActive: boolean;
+  linkedProfileId?: string | null;
+};
 
 interface EmailPreviewProps {
   email: {
@@ -21,9 +29,18 @@ interface EmailPreviewProps {
   hrEmail: string;
   jobDescription: string;
   onClose: () => void;
+  existingApplicationId?: string | null;
 }
 
-export function EmailPreview({ email, company, role, hrEmail, jobDescription, onClose }: EmailPreviewProps) {
+export function EmailPreview({
+  email,
+  company,
+  role,
+  hrEmail,
+  jobDescription,
+  onClose,
+  existingApplicationId = null,
+}: EmailPreviewProps) {
   const [subject, setSubject] = useState(email.subject);
   const [body, setBody] = useState(email.body);
   const [saving, setSaving] = useState(false);
@@ -31,15 +48,76 @@ export function EmailPreview({ email, company, role, hrEmail, jobDescription, on
   const [savingDraft, setSavingDraft] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [applicationId, setApplicationId] = useState<string | null>(null);
+  const [attachments, setAttachments] = useState<AttachmentSummary[]>([]);
+  const [selectedAttachmentId, setSelectedAttachmentId] = useState<string | null>(null);
   const { toast } = useToast();
 
   const gmailUrl = hrEmail
     ? buildGmailComposeUrl({ to: hrEmail, subject, body })
     : null;
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAttachments() {
+      try {
+        const res = await fetch("/api/attachments", { cache: "no-store" });
+        const data = await res.json();
+        if (!res.ok || !data?.success || cancelled) return;
+        const available = Array.isArray(data.data)
+          ? data.data.filter(
+              (attachment: AttachmentSummary) =>
+                attachment &&
+                typeof attachment.id === "string" &&
+                typeof attachment.fileName === "string" &&
+                attachment.isActive !== false
+            )
+          : [];
+        const matchedAttachment = email.usedProfileId
+          ? available.find((attachment: AttachmentSummary) => attachment.linkedProfileId === email.usedProfileId)
+          : null;
+        const defaultAttachmentId =
+          matchedAttachment?.id ?? (available.length === 1 ? available[0]?.id ?? null : null);
+
+        setAttachments(available);
+        setSelectedAttachmentId(defaultAttachmentId);
+      } catch {
+        if (!cancelled) {
+          setAttachments([]);
+          setSelectedAttachmentId(null);
+        }
+      }
+    }
+
+    void loadAttachments();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [email.usedProfileId]);
+
   async function saveApplication(): Promise<string> {
     setSaving(true);
     try {
+      const targetId = applicationId ?? existingApplicationId;
+
+      if (targetId) {
+        const res = await fetch(`/api/applications/${targetId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            hrEmail,
+            jobDescription,
+            mailSubject: subject,
+            mailBody: body,
+          }),
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+        setApplicationId(targetId);
+        return targetId;
+      }
+
       const res = await fetch("/api/applications", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -57,8 +135,22 @@ export function EmailPreview({ email, company, role, hrEmail, jobDescription, on
       const data = await res.json();
 
       if (res.status === 409 && data?.data?.id) {
-        setApplicationId(data.data.id);
-        return data.data.id as string;
+        const existingId = data.data.id as string;
+        setApplicationId(existingId);
+
+        const updateRes = await fetch(`/api/applications/${existingId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            hrEmail,
+            jobDescription,
+            mailSubject: subject,
+            mailBody: body,
+          }),
+        });
+        const updateData = await updateRes.json();
+        if (!updateData.success) throw new Error(updateData.error);
+        return existingId;
       }
 
       if (!data.success) throw new Error(data.error);
@@ -75,8 +167,7 @@ export function EmailPreview({ email, company, role, hrEmail, jobDescription, on
   async function handleSave() {
     try {
       await saveApplication();
-      toast({ title: "Application saved to tracker!" });
-      onClose();
+      toast({ title: "Saved to tracker. You can send now or close this draft." });
     } catch {
       // handled in saveApplication
     }
@@ -89,7 +180,7 @@ export function EmailPreview({ email, company, role, hrEmail, jobDescription, on
     }
     setSending(true);
     try {
-      const appId = applicationId ?? (await saveApplication());
+      const appId = await saveApplication();
       const res = await fetch("/api/gmail/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -98,6 +189,7 @@ export function EmailPreview({ email, company, role, hrEmail, jobDescription, on
           to: hrEmail,
           subject,
           body,
+          attachmentId: selectedAttachmentId,
           emailType: "OUTREACH",
         }),
       });
@@ -115,7 +207,7 @@ export function EmailPreview({ email, company, role, hrEmail, jobDescription, on
   async function handleSaveDraft() {
     setSavingDraft(true);
     try {
-      const appId = applicationId ?? (await saveApplication());
+      const appId = await saveApplication();
       const res = await fetch("/api/emails/draft", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -169,6 +261,12 @@ export function EmailPreview({ email, company, role, hrEmail, jobDescription, on
     toast({ title: "Copied to clipboard" });
   }
 
+  function formatAttachmentSize(sizeBytes: number) {
+    if (!sizeBytes || sizeBytes <= 0) return "0 KB";
+    const kb = sizeBytes / 1024;
+    return kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(kb))} KB`;
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
@@ -191,6 +289,63 @@ export function EmailPreview({ email, company, role, hrEmail, jobDescription, on
 
         {/* Editable email */}
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-muted)]/40 px-3 py-3">
+            <p className="text-xs font-medium text-[var(--color-foreground)]">Resume PDF for this email</p>
+            <p className="mt-1 text-[11px] text-[var(--color-muted-foreground)]">
+              {attachments.length > 0
+                ? "Only the selected PDF below will be attached on Send Now. Open in Gmail cannot pre-attach files."
+                : "No resume PDF is available yet. Upload one from Settings to attach it on Send Now."}
+            </p>
+            {attachments.length > 0 && (
+              <div className="mt-3 space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedAttachmentId(null)}
+                  className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${
+                    selectedAttachmentId === null
+                      ? "border-[var(--color-primary)] bg-[var(--color-primary)]/10"
+                      : "border-[var(--color-border)] bg-black/10 hover:bg-[var(--color-muted)]/60"
+                  }`}
+                >
+                  <p className="text-sm font-medium text-[var(--color-foreground)]">No resume attached</p>
+                  <p className="mt-0.5 text-[11px] text-[var(--color-muted-foreground)]">Send only the email body</p>
+                </button>
+                {attachments.map((attachment) => {
+                  const isSelected = selectedAttachmentId === attachment.id;
+                  const matchesProfile =
+                    Boolean(email.usedProfileId) && attachment.linkedProfileId === email.usedProfileId;
+
+                  return (
+                    <button
+                      key={attachment.id}
+                      type="button"
+                      onClick={() => setSelectedAttachmentId(attachment.id)}
+                      className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${
+                        isSelected
+                          ? "border-[var(--color-primary)] bg-[var(--color-primary)]/10"
+                          : "border-[var(--color-border)] bg-black/10 hover:bg-[var(--color-muted)]/60"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-[var(--color-foreground)]">{attachment.fileName}</p>
+                          <p className="mt-0.5 text-[11px] text-[var(--color-muted-foreground)]">
+                            {formatAttachmentSize(attachment.sizeBytes)}
+                            {matchesProfile ? " - matches selected profile" : ""}
+                          </p>
+                        </div>
+                        {matchesProfile && (
+                          <span className="rounded-full bg-[var(--color-primary)]/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-primary)]">
+                            Best match
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
           <div>
             <label className="text-xs text-[var(--color-muted-foreground)] mb-1 block">Subject</label>
             <input

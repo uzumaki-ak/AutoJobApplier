@@ -33,6 +33,7 @@ export function relativeTime(date: Date | string): string {
 
 /** Status badge color mapping */
 export const STATUS_COLORS = {
+  SAVED: { bg: "bg-amber-500/20", text: "text-amber-300", dot: "bg-amber-300" },
   APPLIED: { bg: "bg-yellow-500/20", text: "text-yellow-400", dot: "bg-yellow-400" },
   INTERVIEW: { bg: "bg-blue-500/20", text: "text-blue-400", dot: "bg-blue-400" },
   OFFER: { bg: "bg-green-500/20", text: "text-green-400", dot: "bg-green-400" },
@@ -42,6 +43,7 @@ export const STATUS_COLORS = {
 
 /** Status display labels */
 export const STATUS_LABELS = {
+  SAVED: "Saved",
   APPLIED: "Applied",
   INTERVIEW: "Interview",
   OFFER: "Offer",

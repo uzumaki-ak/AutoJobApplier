@@ -52,6 +52,7 @@ docker-compose.override.yml
 # Logs
 logs
 *.log
+storage/
 
 # OS generated files
 Thumbs.db

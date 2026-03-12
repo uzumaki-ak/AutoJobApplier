@@ -12,14 +12,16 @@ export default async function DashboardLayout({ children }: { children: React.Re
   if (!session?.user) redirect("/sign-in");
 
   return (
-    <div className="flex min-h-screen bg-[var(--color-background)]">
+    <div className="min-h-screen bg-[var(--color-background)] md:flex md:h-screen md:overflow-hidden">
       {/* Desktop sidebar */}
-      <Sidebar />
+      <div className="hidden md:block md:shrink-0">
+        <Sidebar />
+      </div>
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
         <Navbar user={session.user} />
-        <main className="flex-1 p-4 md:p-6 overflow-auto">
+        <main className="flex-1 overflow-auto p-4 md:p-6">
           {children}
         </main>
       </div>

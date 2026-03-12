@@ -48,18 +48,19 @@ export default async function SettingsPage() {
               {gmailConnected ? "Connected" : "Not connected"}
             </span>
           </div>
-          {!gmailConnected ? (
+          <div className="flex items-center gap-3">
+            {gmailConnected && (
+              <span className="text-xs text-[var(--color-muted-foreground)]">
+                Reconnect if sending starts failing
+              </span>
+            )}
             <a
               href={gmailAuthUrl}
               className="px-4 py-2 rounded-xl bg-[var(--color-primary)] text-[var(--color-primary-foreground)] text-sm font-medium hover:opacity-90"
             >
-              Connect Gmail
+              {gmailConnected ? "Reconnect Gmail" : "Connect Gmail"}
             </a>
-          ) : (
-            <span className="text-xs text-[var(--color-muted-foreground)]">
-              Emails will be sent from your Gmail account
-            </span>
-          )}
+          </div>
         </div>
       </div>
 

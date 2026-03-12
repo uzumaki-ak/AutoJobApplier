@@ -33,6 +33,20 @@ interface GeneratedEmail {
   autoSelectedReason: string;
 }
 
+async function readJsonResponse(res: Response) {
+  const contentType = res.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    return res.json();
+  }
+
+  const text = await res.text();
+  if (text.includes("<!DOCTYPE") || text.includes("<html")) {
+    throw new Error("The extraction endpoint is unavailable right now. Refresh and try again.");
+  }
+
+  throw new Error(text || "Unexpected server response");
+}
+
 export function GenerateForm({ profiles }: GenerateFormProps) {
   const [mode, setMode] = useState<InputMode>("text");
   const [profileId, setProfileId] = useState(profiles.find((p) => p.isDefault)?.id ?? profiles[0]?.id ?? "auto");
@@ -64,7 +78,7 @@ export function GenerateForm({ profiles }: GenerateFormProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ imageBase64: base64, mimeType }),
       });
-      const data = await res.json();
+      const data = await readJsonResponse(res);
       if (!data.success) throw new Error(data.error);
 
       const extracted: ExtractedData = data.data;
@@ -92,12 +106,14 @@ export function GenerateForm({ profiles }: GenerateFormProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url }),
       });
-      const data = await res.json();
+      const data = await readJsonResponse(res);
       if (!data.success) throw new Error(data.error);
 
       const extracted: ExtractedData = data.data;
       setCompany(extracted.company ?? "");
       setRole(extracted.role ?? "");
+      setHrEmail(extracted.hrEmail ?? "");
+      setRecruiterName(extracted.recruiterName ?? "");
       setJobDescription(extracted.jobDescription ?? "");
       setMode("text");
       toast({ title: "Details extracted from URL" });
@@ -110,8 +126,8 @@ export function GenerateForm({ profiles }: GenerateFormProps) {
 
   /** Generate email */
   async function handleGenerate() {
-    if (!company || !role || !jobDescription) {
-      toast({ title: "Company, role, and job description are required", variant: "destructive" });
+    if (!role || !jobDescription) {
+      toast({ title: "Role and job description are required", variant: "destructive" });
       return;
     }
 
@@ -122,7 +138,7 @@ export function GenerateForm({ profiles }: GenerateFormProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ profileId, company, role, jobDescription, recruiterName, multiAgent }),
       });
-      const data = await res.json();
+      const data = await readJsonResponse(res);
       if (!data.success) throw new Error(data.error);
       setGenerated(data.data);
     } catch (err: unknown) {
@@ -185,12 +201,12 @@ export function GenerateForm({ profiles }: GenerateFormProps) {
       <div className="glass rounded-2xl p-6 space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="text-xs text-[var(--color-muted-foreground)] mb-1 block">Company *</label>
+            <label className="text-xs text-[var(--color-muted-foreground)] mb-1 block">Company</label>
             <input
               type="text"
               value={company}
               onChange={(e) => setCompany(e.target.value)}
-              placeholder="Google, Flipkart..."
+              placeholder="Google, Flipkart... (optional if OCR misses it)"
               className="w-full px-3 py-2.5 rounded-xl bg-[var(--color-input)] border border-[var(--color-border)] text-[var(--color-foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
             />
           </div>
@@ -256,7 +272,7 @@ export function GenerateForm({ profiles }: GenerateFormProps) {
         </label>
         <button
           onClick={handleGenerate}
-          disabled={loading || !company || !role || !jobDescription}
+          disabled={loading || !role || !jobDescription}
           className="sm:ml-auto px-6 py-3 rounded-xl bg-[var(--color-primary)] text-[var(--color-primary-foreground)] font-semibold text-sm hover:opacity-90 disabled:opacity-50 transition-opacity flex items-center gap-2"
         >
           {loading ? (

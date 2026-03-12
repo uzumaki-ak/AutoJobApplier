@@ -26,6 +26,19 @@ export class EmptyExtractionError extends Error {
   }
 }
 
+const EMAIL_REGEX = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
+
+function findVisibleEmail(...values: Array<string | null | undefined>) {
+  for (const value of values) {
+    if (!value) continue;
+    const match = value.match(EMAIL_REGEX);
+    if (match) {
+      return match[0].trim();
+    }
+  }
+  return undefined;
+}
+
 function parseJsonFromText(text: string): ExtractedJobData {
   const cleaned = text.replace(/```json/g, "").replace(/```/g, "").trim();
   try {
@@ -52,14 +65,22 @@ function normalizeExtractedJobData(value: ExtractedJobData): ExtractedJobData {
           .map((item) => (item as string).trim())
       : [];
 
+  const company = cleanString(value.company);
+  const role = cleanString(value.role);
+  const recruiterName = cleanOptional(value.recruiterName);
+  const jobDescription = cleanString(value.jobDescription);
+  const location = cleanOptional(value.location);
+  const skills = cleanSkills(value.skills);
+  const hrEmail = cleanOptional(value.hrEmail) ?? findVisibleEmail(jobDescription, recruiterName, company, role);
+
   return {
-    company: cleanString(value.company),
-    role: cleanString(value.role),
-    hrEmail: cleanOptional(value.hrEmail),
-    recruiterName: cleanOptional(value.recruiterName),
-    jobDescription: cleanString(value.jobDescription),
-    location: cleanOptional(value.location),
-    skills: cleanSkills(value.skills),
+    company,
+    role,
+    hrEmail,
+    recruiterName,
+    jobDescription,
+    location,
+    skills,
   };
 }
 
@@ -88,6 +109,7 @@ Important extraction rules:
 - If the role appears as a hashtag (e.g. "#AccountManagerIntern"), return "Account Manager Intern".
 - If the company appears after "Work From Home |" or after "Join", use that as company.
 - Include the full job description text and bullet points if visible.
+- If any email address is visible anywhere, especially blue/clickable text, capture it exactly in hrEmail.
 - Do NOT invent details. If not visible, use empty string or null.
 
 Return ONLY valid JSON, no markdown.
@@ -183,7 +205,7 @@ Return exactly:
     const result = await model.generateContent(prompt);
     const text = result.response.text().trim();
     const cleaned = text.replace(/```json/g, "").replace(/```/g, "").trim();
-    const parsed = JSON.parse(cleaned) as ExtractedJobData;
+    const parsed = normalizeExtractedJobData(JSON.parse(cleaned) as ExtractedJobData);
 
     aiLogger.info({ company: parsed.company, role: parsed.role, duration: Date.now() - start }, "Text extraction done");
     return parsed;

@@ -14,6 +14,11 @@ export default async function GeneratePage() {
     orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }],
   });
 
+  const typedProfiles = profiles.map(profile => ({
+    ...profile,
+    projects: Array.isArray(profile.projects) ? profile.projects : [],
+  })) as unknown as Parameters<typeof GenerateForm>[0]["profiles"];
+
   if (profiles.length === 0) {
     return (
       <div className="max-w-2xl mx-auto text-center py-20 space-y-4">
@@ -44,7 +49,7 @@ export default async function GeneratePage() {
         </p>
       </div>
 
-      <GenerateForm profiles={profiles as Parameters<typeof GenerateForm>[0]["profiles"]} />
+      <GenerateForm profiles={typedProfiles as Parameters<typeof GenerateForm>[0]["profiles"]} />
     </div>
   );
 }

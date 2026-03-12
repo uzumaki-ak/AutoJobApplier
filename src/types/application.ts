@@ -1,6 +1,7 @@
 // [F71] src/types/application.ts — Application and Kanban types
 
 export type ApplicationStatus =
+  | "SAVED"
   | "APPLIED"
   | "INTERVIEW"
   | "OFFER"

@@ -141,6 +141,7 @@ model StatusHistory {
 
 // ─── Enums ────────────────────────────────────────
 enum ApplicationStatus {
+  SAVED
   APPLIED
   INTERVIEW
   OFFER

@@ -16,13 +16,20 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json()
     const { profileId, company, role, jobDescription, recruiterName, multiAgent } = body
+    const normalizedCompany = typeof company === "string" ? company.trim() : ""
+    const normalizedRole = typeof role === "string" ? role.trim() : ""
+    const normalizedJobDescription = typeof jobDescription === "string" ? jobDescription.trim() : ""
+    const normalizedRecruiterName = typeof recruiterName === "string" ? recruiterName.trim() : ""
 
-    if (!company || !jobDescription) {
+    if (!normalizedJobDescription) {
       return NextResponse.json(
-        { success: false, error: "company and jobDescription are required" },
+        { success: false, error: "jobDescription is required" },
         { status: 400 }
       )
     }
+
+    const resolvedCompany = normalizedCompany || "Hiring Team"
+    const resolvedRole = normalizedRole || "the role"
 
     // Fetch all profiles for this user
     const profiles = await db.profile.findMany({ where: { userId } })
@@ -46,8 +53,8 @@ export async function POST(req: NextRequest) {
       } else {
         // Ask AI to pick the best profile
         const classification = await classifyProfile({
-          jobDescription,
-          role,
+          jobDescription: normalizedJobDescription,
+          role: resolvedRole,
           profiles: normalizedProfiles.map((p) => ({
             id: p.id,
             name: p.name,
@@ -62,23 +69,23 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    genLogger.info({ userId, company, role, profileId: profile.id }, "Generating email")
+    genLogger.info({ userId, company: resolvedCompany, role: resolvedRole, profileId: profile.id }, "Generating email")
 
     const email =
       multiAgent && process.env.EURI_API_KEY
         ? await generateEmailMultiAgent({
             profile,
-            company,
-            role,
-            jobDescription,
-            recruiterName,
+            company: resolvedCompany,
+            role: resolvedRole,
+            jobDescription: normalizedJobDescription,
+            recruiterName: normalizedRecruiterName || undefined,
           })
         : await generateEmail({
             profile,
-            company,
-            role,
-            jobDescription,
-            recruiterName,
+            company: resolvedCompany,
+            role: resolvedRole,
+            jobDescription: normalizedJobDescription,
+            recruiterName: normalizedRecruiterName || undefined,
           })
 
     return NextResponse.json({

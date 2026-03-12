@@ -11,11 +11,11 @@ type MultiAgentEmailOpts = {
 };
 
 export async function generateEmailMultiAgent(opts: MultiAgentEmailOpts): Promise<{ subject: string; body: string }> {
-  // Step 1: Generate a strong base draft using Groq (fast)
+  // Step 1: Generate a base draft using Groq.
   const draft = await generateEmail(opts);
 
   try {
-    // Step 2: Strategist agent (Euri) — outline key points to emphasize
+    // Step 2: Strategist agent creates a role-relevant plan.
     const plan = await callEuriChat({
       temperature: 0.3,
       max_tokens: 600,
@@ -23,7 +23,7 @@ export async function generateEmailMultiAgent(opts: MultiAgentEmailOpts): Promis
         {
           role: "system",
           content:
-            "You are a job application strategist. Create a concise plan for a strong email: 1) opening, 2) top 3-5 bullet points, 3) company-fit paragraph, 4) links section (only if provided), 5) closing/signature. Do NOT invent links or contact info. Avoid repeating ideas.",
+            "You are a job application strategist. Build a concise role-targeted plan with: 1) opening, 2) top 3-4 bullet points mapped to job requirements, 3) company-fit paragraph, 4) links section only if links are provided, 5) closing/signature. Include only skills directly relevant to the posted role. If overlap is partial, keep claims honest and specific. Do NOT invent links or contact info.",
         },
         {
           role: "user",
@@ -46,7 +46,7 @@ export async function generateEmailMultiAgent(opts: MultiAgentEmailOpts): Promis
       ],
     });
 
-    // Step 3: Editor agent (Euri) — rewrite the draft using the plan
+    // Step 3: Editor agent rewrites according to the plan.
     const refinedBody = await callEuriChat({
       temperature: 0.4,
       max_tokens: 1400,
@@ -54,14 +54,11 @@ export async function generateEmailMultiAgent(opts: MultiAgentEmailOpts): Promis
         {
           role: "system",
           content:
-            "You are an expert editor. Rewrite the email to be detailed, formal, and specific. Keep 260-360 words. Include a links section only if links are provided. Do NOT invent links or contact info. Avoid repetition. Output only the email body.",
+            "You are an expert editor. Rewrite the email to be formal, specific, and role-relevant. Keep 170-240 words. Keep exactly 3-4 bullet points, each tied to job requirements. Do not mention unrelated stacks. If overlap is partial, position transferable skills honestly. Include links section only if links are provided. Do NOT invent links or contact info. Output only the email body.",
         },
         {
           role: "user",
-          content: [
-            `Plan:\n${plan}`,
-            `\nDraft:\n${draft.body}`,
-          ].join("\n"),
+          content: [`Plan:\n${plan}`, `\nDraft:\n${draft.body}`].join("\n"),
         },
       ],
     });

@@ -5,6 +5,7 @@ import { db } from "@/lib/db/prisma";
 import { notFound } from "next/navigation";
 import { formatDate, STATUS_COLORS, STATUS_LABELS, scoreColor, buildGmailComposeUrl } from "@/lib/utils";
 import Link from "next/link";
+import { ApplicationEmailActions } from "@/components/applications/application-email-actions";
 
 export default async function ApplicationDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -22,6 +23,7 @@ export default async function ApplicationDetailPage({ params }: { params: Promis
   if (!app) notFound();
 
   const colors = STATUS_COLORS[app.status];
+  const dateLabel = app.status === "SAVED" ? "Saved" : "Applied";
   const gmailUrl = app.hrEmail && app.mailSubject && app.mailBody
     ? buildGmailComposeUrl({ to: app.hrEmail, subject: app.mailSubject, body: app.mailBody })
     : null;
@@ -46,7 +48,7 @@ export default async function ApplicationDetailPage({ params }: { params: Promis
       <div className="glass rounded-2xl p-6 space-y-4">
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
-            <p className="text-[var(--color-muted-foreground)] text-xs mb-1">Applied</p>
+            <p className="text-[var(--color-muted-foreground)] text-xs mb-1">{dateLabel}</p>
             <p className="text-[var(--color-foreground)]">{formatDate(app.appliedAt)}</p>
           </div>
           {app.hrEmail && (
@@ -87,12 +89,25 @@ export default async function ApplicationDetailPage({ params }: { params: Promis
       {/* Email draft */}
       {app.mailBody && (
         <div className="glass rounded-2xl p-6 space-y-3">
-          <h2 className="font-display text-sm font-semibold text-[var(--color-foreground)]">EMAIL DRAFT</h2>
+          <h2 className="font-display text-sm font-semibold text-[var(--color-foreground)]">
+            {app.status === "SAVED" ? "TRACKED DRAFT" : "EMAIL DRAFT"}
+          </h2>
           {app.mailSubject && <p className="text-xs text-[var(--color-muted-foreground)]">Subject: {app.mailSubject}</p>}
           <pre className="text-sm text-[var(--color-foreground)] whitespace-pre-wrap font-sans bg-[var(--color-muted)] p-4 rounded-xl">
             {app.mailBody}
           </pre>
           <div className="flex gap-3">
+            <ApplicationEmailActions
+              applicationId={app.id}
+              company={app.company}
+              role={app.role}
+              hrEmail={app.hrEmail ?? ""}
+              jobDescription={app.jobDescription ?? ""}
+              subject={app.mailSubject ?? ""}
+              body={app.mailBody}
+              profileId={app.profileId ?? ""}
+              profileName={app.profile?.name ?? "Saved Profile"}
+            />
             {gmailUrl && (
               <a
                 href={gmailUrl}

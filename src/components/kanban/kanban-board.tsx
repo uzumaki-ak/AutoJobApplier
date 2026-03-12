@@ -1,30 +1,31 @@
-// [F45] src/components/kanban/kanban-board.tsx — Main dnd-kit Kanban board
+// [F45] src/components/kanban/kanban-board.tsx - Main dnd-kit Kanban board
 // Drag cards between columns to update status
 
 "use client";
 
-import { useState, useCallback } from "react";
+import { useCallback, useState } from "react";
 import {
   DndContext,
   DragEndEvent,
   DragOverlay,
   DragStartEvent,
   PointerSensor,
+  closestCorners,
   useSensor,
   useSensors,
-  closestCorners,
 } from "@dnd-kit/core";
-import { KanbanColumn } from "./kanban-column";
 import { KanbanCard } from "./kanban-card";
-import type { Application, ApplicationStatus } from "@/types/application";
+import { KanbanColumn } from "./kanban-column";
 import { useToast } from "@/hooks/use-toast";
+import type { Application, ApplicationStatus } from "@/types/application";
 
 const COLUMNS: { id: ApplicationStatus; label: string; emoji: string }[] = [
-  { id: "APPLIED", label: "Applied", emoji: "🟡" },
-  { id: "INTERVIEW", label: "Interview", emoji: "🔵" },
-  { id: "OFFER", label: "Offer", emoji: "🟢" },
-  { id: "REJECTED", label: "Rejected", emoji: "🔴" },
-  { id: "NO_RESPONSE", label: "No Response", emoji: "⚫" },
+  { id: "SAVED", label: "Saved", emoji: "S" },
+  { id: "APPLIED", label: "Applied", emoji: "A" },
+  { id: "INTERVIEW", label: "Interview", emoji: "I" },
+  { id: "OFFER", label: "Offer", emoji: "O" },
+  { id: "REJECTED", label: "Rejected", emoji: "R" },
+  { id: "NO_RESPONSE", label: "No Response", emoji: "N" },
 ];
 
 interface KanbanBoardProps {
@@ -36,19 +37,16 @@ export function KanbanBoard({ initialApplications }: KanbanBoardProps) {
   const [activeApp, setActiveApp] = useState<Application | null>(null);
   const { toast } = useToast();
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
-  );
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
-  /** Group apps by status */
   const getColumnApps = useCallback(
-    (status: ApplicationStatus) => applications.filter((a) => a.status === status),
+    (status: ApplicationStatus) => applications.filter((application) => application.status === status),
     [applications]
   );
 
   function handleDragStart(event: DragStartEvent) {
-    const app = applications.find((a) => a.id === event.active.id);
-    setActiveApp(app ?? null);
+    const application = applications.find((item) => item.id === event.active.id);
+    setActiveApp(application ?? null);
   }
 
   async function handleDragEnd(event: DragEndEvent) {
@@ -57,29 +55,33 @@ export function KanbanBoard({ initialApplications }: KanbanBoardProps) {
 
     if (!over) return;
 
-    const appId = active.id as string;
+    const applicationId = active.id as string;
     const newStatus = over.id as ApplicationStatus;
+    const application = applications.find((item) => item.id === applicationId);
 
-    const app = applications.find((a) => a.id === appId);
-    if (!app || app.status === newStatus) return;
+    if (!application || application.status === newStatus) {
+      return;
+    }
 
-    // Optimistic update
     setApplications((prev) =>
-      prev.map((a) => (a.id === appId ? { ...a, status: newStatus } : a))
+      prev.map((item) => (item.id === applicationId ? { ...item, status: newStatus } : item))
     );
 
     try {
-      const res = await fetch(`/api/applications/${appId}`, {
+      const res = await fetch(`/api/applications/${applicationId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),
       });
-      if (!res.ok) throw new Error();
+
+      if (!res.ok) {
+        throw new Error();
+      }
+
       toast({ title: `Moved to ${newStatus.replace("_", " ")}` });
     } catch {
-      // Revert on failure
       setApplications((prev) =>
-        prev.map((a) => (a.id === appId ? { ...a, status: app.status } : a))
+        prev.map((item) => (item.id === applicationId ? { ...item, status: application.status } : item))
       );
       toast({ title: "Failed to update status", variant: "destructive" });
     }
@@ -92,26 +94,23 @@ export function KanbanBoard({ initialApplications }: KanbanBoardProps) {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex gap-4 overflow-x-auto pb-4 min-h-[60vh]">
-        {COLUMNS.map((col) => (
+      <div className="flex min-h-[60vh] gap-4 overflow-x-auto pb-4">
+        {COLUMNS.map((column) => (
           <KanbanColumn
-            key={col.id}
-            id={col.id}
-            label={col.label}
-            emoji={col.emoji}
-            applications={getColumnApps(col.id)}
+            key={column.id}
+            id={column.id}
+            label={column.label}
+            emoji={column.emoji}
+            applications={getColumnApps(column.id)}
             onRefresh={(updated) =>
-              setApplications((prev) => prev.map((a) => (a.id === updated.id ? updated : a)))
+              setApplications((prev) => prev.map((item) => (item.id === updated.id ? updated : item)))
             }
-            onDelete={(id) => setApplications((prev) => prev.filter((a) => a.id !== id))}
+            onDelete={(id) => setApplications((prev) => prev.filter((item) => item.id !== id))}
           />
         ))}
       </div>
 
-      {/* Drag overlay — shows while dragging */}
-      <DragOverlay>
-        {activeApp && <KanbanCard application={activeApp} isDragging />}
-      </DragOverlay>
+      <DragOverlay>{activeApp && <KanbanCard application={activeApp} isDragging />}</DragOverlay>
     </DndContext>
   );
 }
