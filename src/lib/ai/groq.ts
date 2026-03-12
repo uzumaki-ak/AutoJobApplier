@@ -19,14 +19,19 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! });
 
 const MODEL = "llama-3.3-70b-versatile";
 
+type GroqCallOptions = {
+  temperature?: number;
+  max_tokens?: number;
+};
+
 /** Call Groq and return text response */
-async function callGroq(prompt: string, systemMsg?: string): Promise<string> {
+async function callGroq(prompt: string, systemMsg?: string, options?: GroqCallOptions): Promise<string> {
   const start = Date.now();
   try {
     const response = await groq.chat.completions.create({
       model: MODEL,
-      temperature: 0.45,
-      max_tokens: 512,
+      temperature: options?.temperature ?? 0.45,
+      max_tokens: options?.max_tokens ?? 512,
       messages: [
         ...(systemMsg ? [{ role: "system" as const, content: systemMsg }] : []),
         { role: "user" as const, content: prompt },
@@ -51,7 +56,100 @@ function parseJSON<T>(text: string): T {
     .replace(/```json/g, "")
     .replace(/```/g, "")
     .trim();
-  return JSON.parse(cleaned) as T;
+  try {
+    return JSON.parse(cleaned) as T;
+  } catch {
+    const extracted = extractFirstJson(cleaned);
+    if (extracted) {
+      return JSON.parse(extracted) as T;
+    }
+    throw new Error("Invalid JSON from model");
+  }
+}
+
+function extractFirstJson(text: string): string | null {
+  const startIndex = text.search(/[\[{]/);
+  if (startIndex === -1) return null;
+
+  const startChar = text[startIndex];
+  const endChar = startChar === "{" ? "}" : "]";
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = startIndex; i < text.length; i += 1) {
+    const ch = text[i];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === "\\") {
+        escaped = true;
+      } else if (ch === "\"") {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === "\"") {
+      inString = true;
+      continue;
+    }
+
+    if (ch === startChar) depth += 1;
+    if (ch === endChar) depth -= 1;
+
+    if (depth === 0) {
+      return text.slice(startIndex, i + 1);
+    }
+  }
+
+  return null;
+}
+
+function buildFallbackProfile(resumeText: string): CreateProfileInput {
+  const lines = resumeText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const emailMatch = resumeText.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  const phoneMatch = resumeText.match(/(\+?\d[\d\s().-]{7,}\d)/);
+  const nameGuess = lines.find((line) => line.length <= 60) ?? "Imported Resume";
+  const titleGuess =
+    lines.find((line) => /(developer|engineer|designer|analyst|manager|intern|student)/i.test(line)) ??
+    "Candidate";
+  const experienceLevel = /senior|lead|principal|manager/i.test(resumeText)
+    ? "SENIOR"
+    : /mid|intermediate/i.test(resumeText)
+      ? "MID"
+      : /intern|fresher|student|junior/i.test(resumeText)
+        ? "JUNIOR"
+        : "JUNIOR";
+
+  return {
+    name: nameGuess || "Imported Resume",
+    title: titleGuess || "Candidate",
+    summary: "",
+    contactEmail: emailMatch?.[0] ?? "",
+    contactPhone: phoneMatch?.[0] ?? "",
+    location: "",
+    portfolioUrl: "",
+    githubUrl: "",
+    linkedinUrl: "",
+    resumeUrl: "",
+    skills: [],
+    projects: [],
+    experience: [],
+    education: [],
+    certifications: [],
+    achievements: [],
+    resumeText,
+    experienceLevel,
+    preferredRoles: titleGuess ? [titleGuess] : [],
+    tonePreference: "confident",
+    isDefault: false,
+  };
 }
 
 // ─── Public API ────────────────────────────────────
@@ -119,11 +217,14 @@ export async function classifyProfile(opts: {
 export async function extractProfileFromResumeText(opts: {
   resumeText: string;
 }): Promise<CreateProfileInput> {
-  const raw = await callGroq(buildResumeExtractionPrompt(opts));
+  const raw = await callGroq(buildResumeExtractionPrompt(opts), undefined, {
+    temperature: 0.2,
+    max_tokens: 900,
+  });
   try {
     return parseJSON(raw);
   } catch {
     aiLogger.warn({ raw }, "Failed to parse resume extraction JSON");
-    throw new Error("Failed to parse resume. Please try again or paste clean text.");
+    return buildFallbackProfile(opts.resumeText);
   }
 }

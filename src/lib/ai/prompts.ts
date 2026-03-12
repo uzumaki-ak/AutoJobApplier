@@ -265,7 +265,16 @@ Return EXACTLY this JSON structure:
 
 Rules:
 - If a field is not found, use empty string or empty array.
-- Do NOT invent employers or projects; only use what appears in the text.`;
+- Do NOT invent employers or projects; only use what appears in the text.
+- Keep lists short to fit output size limits:
+  - skills: max 12
+  - projects: max 3
+  - experience: max 4
+  - education: max 2
+  - certifications: max 6
+  - achievements: max 6
+  - preferredRoles: max 4
+- Keep each field concise.`;
 }
 
 /** Email subject line generator */
