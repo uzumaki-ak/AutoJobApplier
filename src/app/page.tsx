@@ -51,6 +51,17 @@ export default async function HomePage() {
         >
           GET STARTED →
         </Link>
+
+        {/* Footer links */}
+        <div className="flex items-center justify-center gap-4 text-xs text-[var(--color-muted-foreground)]">
+          <Link href="/privacy" className="hover:underline">
+            Privacy Policy
+          </Link>
+          <span>•</span>
+          <Link href="/terms" className="hover:underline">
+            Terms of Service
+          </Link>
+        </div>
       </div>
     </main>
   );
